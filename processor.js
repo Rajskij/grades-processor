@@ -138,7 +138,6 @@ const processLearnerData = (studentAssignments, assignmentDataById, studentId) =
  * @throws {Error} When input validation fails with specific error messages
  */
 const validateScore = (assignmentData, studentData) => {
-    // Input existence validation
     if (assignmentData == null) {
         throw new Error("Assignment data is missing or null");
     }
@@ -148,31 +147,27 @@ const validateScore = (assignmentData, studentData) => {
 
     const assignmentScore = assignmentData.score;
     const studentScore = studentData.score;
-    // Score existence validation
-    if (typeof assignmentScore === 'undefined') {
-        throw new Error("Assignment score is missing");
-    }
-    if (typeof studentScore === 'undefined') {
-        throw new Error("Student score is missing");
-    }
+    const arr = [assignmentScore, studentScore];
 
-    // Type validation
-    if (typeof assignmentScore !== 'number' || isNaN(assignmentScore)) {
-        throw new Error("Assignment score must be a valid number");
-    }
-    if (typeof studentScore !== 'number' || isNaN(studentScore)) {
-        throw new Error("Student score must be a valid number");
-    }
-
-    // Value validation
-    if (assignmentScore <= 0) {
-        throw new Error("Assignment maximum score must be greater than 0");
-    }
-    if (studentScore < 0) {
-        throw new Error("Student score cannot be negative");
-    }
-    if (studentScore > assignmentScore) {
-        throw new Error("Student score cannot exceed assignment maximum score");
+    for (let i = 0; i < arr.length; i++) {
+        let scoreName = i === 0 ? "Assignment" : "Student";
+        let score = arr[i];
+        
+        if (typeof score === 'undefined') {
+            throw new Error(`${scoreName} score is missing`);
+        }
+        if (typeof score !== 'number' || isNaN(score)) {
+            throw new Error(`${scoreName} score must be a valid number`);
+        }
+        if (scoreName === "Assignment" && score <= 0) {
+            throw new Error("Assignment maximum score must be greater than 0");
+        }
+        if (scoreName === "Student" && score < 0) {
+            throw new Error("Student score cannot be negative");
+        }
+        if (scoreName === "Student" && score > arr[0]) {
+            throw new Error("Student score cannot exceed assignment maximum score");
+        }
     }
 
     return { assignmentScore, studentScore };
