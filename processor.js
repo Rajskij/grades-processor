@@ -5,16 +5,16 @@ export function getLearnerData(course, ag, submissions) {
     }
     
     // Build data structures
-    const submissionsByStudentId = buildStudentIdToScoreMap(submissions);
-    const assignmentDataById = buildIdToAssignmentMap(ag.assignments);
+    const submissionsByStudentId = buildStudentSubmissionsData(submissions);
+    const assignmentDataById = buildAssignmentDataMap(ag.assignments);
     const results = [];
 
     // Process each student
-    submissionsByStudentId.forEach((studentAssignments, studentId) => {
-        const learner = processLearnerData(studentAssignments, assignmentDataById, studentId);
+    Object.entries(submissionsByStudentId).forEach(([studentId, studentAssignments]) => {
+        const learner = processLearnerData(studentId, studentAssignments, assignmentDataById);
         results.push(learner);
     });
- 
+
     return results;
 }
 
@@ -24,7 +24,7 @@ export function getLearnerData(course, ag, submissions) {
  * @returns {Map<number, {score: number, due_at: string}>} 
  *          Map where key is assignment ID and value contains score and due date
  */
-const buildIdToAssignmentMap = function(assignments) {
+const buildAssignmentDataMap = function(assignments) {
     const assignmentDataById = new Map();
 
     for (let assignment of assignments) {
@@ -40,25 +40,22 @@ const buildIdToAssignmentMap = function(assignments) {
 }
 
 /**
- * Organizes submissions by student ID
+ * Groups submissions by learner_id into { learner_id: submissionDetails[] }.
  * @param {Array<Object>} submissions - Array of submission objects
- * @returns {Map<number, Array<{assignment_id: number, score: number, submitted_at: string}>>}
- *          Map where key is student ID and value is array of their submissions
+ * @returns {Object} Mapped submissions by learner ID (e.g., { 125: [{ assignment_id: 1, score: 90, ... }]}).
  */
-const buildStudentIdToScoreMap = function(submissions) {
-    const submissionsByStudentId = new Map();
-
-    for (let sub of submissions) {
-        const studentId = sub.learner_id;
-        const assignmentData = {
-            assignment_id: sub.assignment_id,
-            score: sub.submission.score,
-            submitted_at: sub.submission.submitted_at
-        };
-        addValue(submissionsByStudentId, studentId, assignmentData);
-    }
-
-    return submissionsByStudentId;
+const buildStudentSubmissionsData = (submissions) => {
+    return submissions.reduce((acc, { learner_id, assignment_id, submission }) => {
+        if (!acc[learner_id]) {
+            acc[learner_id] = [];
+        }
+        acc[learner_id].push({
+            assignment_id: assignment_id,
+            score: submission.score,
+            submitted_at: submission.submitted_at
+        })
+        return acc;
+    }, {});
 }
 
 /**
@@ -72,46 +69,26 @@ const addValue = (map, key, value) => {
 }
 
 /**
- * Creates Date objects from submission and assignment due dates
- * @param {Object} studentData - Student submission data
- * @param {Object} assignment - Assignment information
- * @returns {{submitDate: Date, dueDate: Date}} Date objects or undefined if error occurs
- * @throws {Error} If date parsing fails (currently caught and logged)
- */
-
-const buildDate = (studentData, assignment) => {
-    try {
-        const submitDate = new Date(studentData.submitted_at);
-        const dueDate = new Date(assignment.due_at);
-    
-        return {submitDate, dueDate};
-    } catch (error) {
-        console.error("The error occurred:", error.message);
-    }
-}
-
-/**
  * Processes a student's assignments to calculate scores and averages
+ * @param {Number} studentId - The student's identifier
  * @param {Array<Object>} studentAssignments - Array of the student's assignments
  * @param {Map} assignmentDataById - Mapping of assignment IDs to their data
- * @param {number} studentId - The student's identifier
  * @returns {Object} Learner data object containing:
  *                   - id: Student ID
  *                   - [assignment_id]: Average score on the assignment
  *                   - avg: Average score on the assignments
  */
-const processLearnerData = (studentAssignments, assignmentDataById, studentId) => {
+const processLearnerData = (studentId, studentAssignments, assignmentDataById) => {
     const learner = { id: studentId };
     let totalMaxScore = 0;
     let totalScore = 0;
 
-    for (let studentData of studentAssignments) {   
-        const assignmentId = studentData.assignment_id;
-        const assignmentData = assignmentDataById.get(assignmentId);
+    for (const { assignment_id, score, submitted_at } of studentAssignments) {
+        let studentScore = score;
+        const { score: assignmentScore, due_at } = assignmentDataById.get(assignment_id);
 
-        let { assignmentScore, studentScore } = validateScore(assignmentData, studentData);
-        const { submitDate, dueDate } = buildDate(studentData, assignmentData);
-        const currentDate = new Date();
+        validateScore(assignmentScore, studentScore);
+        const { submitDate, dueDate, currentDate } = buildDate(submitted_at, due_at);
 
         if (submitDate > dueDate) {
             studentScore *= 0.9;
@@ -123,7 +100,7 @@ const processLearnerData = (studentAssignments, assignmentDataById, studentId) =
         totalScore += studentScore;
         totalMaxScore += assignmentScore;
 
-        learner[assignmentId] = (studentScore / assignmentScore).toFixed(2); 
+        learner[assignment_id] = (studentScore / assignmentScore).toFixed(2);
     }
 
     learner.avg = (totalScore / totalMaxScore).toFixed(3);
@@ -131,22 +108,32 @@ const processLearnerData = (studentAssignments, assignmentDataById, studentId) =
 }
 
 /**
+ * Creates Date objects from submission and assignment due dates
+ * @param {String} studentDate - Student submission date
+ * @param {String} assignmentDate - Assignment due date
+ * @returns {{submitDate: Date, dueDate: Date, currentDate: Date}} Date objects or undefined if parsing fails
+ * @throws {Error} If date parsing fails
+ */
+
+const buildDate = (studentDate, assignmentDate) => {
+    try {
+        return {
+            submitDate: new Date(studentDate),
+            dueDate: new Date(assignmentDate),
+            currentDate: new Date()
+        };
+    } catch (error) {
+        console.error("Date parsing failed:", error.message);
+    }
+}
+
+/**
  * Validates assignment and student scores
- * @param {Object} assignmentData - Assignment data containing score
- * @param {Object} studentData - Student submission data containing score
- * @returns {{assignmentScore: Number, studentScore: Number}} Validated scores
+ * @param {Number} assignmentScore - Assignment max score
+ * @param {Number} studentScore - Student submission score
  * @throws {Error} When input validation fails with specific error messages
  */
-const validateScore = (assignmentData, studentData) => {
-    if (assignmentData == null) {
-        throw new Error("Assignment data is missing or null");
-    }
-    if (studentData == null) {
-        throw new Error("Student submission data is missing or null");
-    }
-
-    const assignmentScore = assignmentData.score;
-    const studentScore = studentData.score;
+const validateScore = (assignmentScore, studentScore) => {
     const arr = [assignmentScore, studentScore];
 
     for (let i = 0; i < arr.length; i++) {
@@ -169,6 +156,4 @@ const validateScore = (assignmentData, studentData) => {
             throw new Error("Student score cannot exceed assignment maximum score");
         }
     }
-
-    return { assignmentScore, studentScore };
 };

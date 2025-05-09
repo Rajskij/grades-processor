@@ -11,3 +11,10 @@ import { courseInfo, assignmentGroup, learnerSubmissions } from './data.js';
 // └─────────┴────────┴────────┴─────┴─────────┘
 const result = getLearnerData(courseInfo, assignmentGroup, learnerSubmissions);
 console.table(result);
+
+// Test error input
+// Output example:
+// throw new Error("Assignment group does not belong to its course");
+courseInfo.id = 1;
+const error = getLearnerData(courseInfo, assignmentGroup, learnerSubmissions);
+console.table(error);
