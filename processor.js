@@ -59,16 +59,6 @@ const buildStudentSubmissionsData = (submissions) => {
 }
 
 /**
- * Helper function to add values to a Map while handling key initialization
- */
-const addValue = (map, key, value) => {
-    if (!map.has(key)) {
-        map.set(key, []);
-    }
-    map.get(key).push(value);
-}
-
-/**
  * Processes a student's assignments to calculate scores and averages
  * @param {Number} studentId - The student's identifier
  * @param {Array<Object>} studentAssignments - Array of the student's assignments
